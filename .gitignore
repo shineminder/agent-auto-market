@@ -1,0 +1,8 @@
+bin/
+obj/
+out/
+dist/
+.vs/
+*.user
+*.pem
+!keys/release-public.pem

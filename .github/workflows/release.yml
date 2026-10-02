@@ -1,0 +1,79 @@
+name: release
+
+on:
+  push:
+    tags: ['v*.*.*']
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    strategy:
+      fail-fast: true
+      matrix:
+        include:
+          - os: windows-latest
+            rid: win-x64
+            fichier: cc-agent-win-x64.exe
+          - os: ubuntu-24.04
+            rid: linux-x64
+            fichier: cc-agent-linux-x64
+          - os: ubuntu-24.04-arm
+            rid: linux-arm64
+            fichier: cc-agent-linux-arm64
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+      - name: Outils de compilation native (Linux)
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y clang zlib1g-dev
+      - name: Compilation
+        shell: bash
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          dotnet publish src/Agent/Agent.csproj -c Release -r ${{ matrix.rid }} -p:Version=$VERSION -o out
+          if [ "${{ runner.os }}" = "Windows" ]; then cp out/cc-agent.exe "${{ matrix.fichier }}"; else cp out/cc-agent "${{ matrix.fichier }}"; fi
+      # Signature Authenticode : a ajouter ici des que le certificat de signature de code est disponible.
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.rid }}
+          path: ${{ matrix.fichier }}
+
+  publier:
+    needs: build
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+      id-token: write
+      attestations: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+      - name: Installateurs
+        run: cp install/install.ps1 install/install.sh install/installer.bat install/installer.sh dist/
+      - name: Empreintes et signature
+        env:
+          RELEASE_SIGNING_KEY: ${{ secrets.RELEASE_SIGNING_KEY }}
+        run: |
+          test -n "$RELEASE_SIGNING_KEY" || { echo "Secret RELEASE_SIGNING_KEY absent"; exit 1; }
+          cd dist
+          sha256sum cc-agent-* install.ps1 install.sh installer.bat installer.sh > SHA256SUMS
+          umask 077
+          printf '%s\n' "$RELEASE_SIGNING_KEY" > "$RUNNER_TEMP/cle.pem"
+          openssl dgst -sha256 -sign "$RUNNER_TEMP/cle.pem" -out SHA256SUMS.sig SHA256SUMS
+          rm -f "$RUNNER_TEMP/cle.pem"
+          openssl dgst -sha256 -verify ../keys/release-public.pem -signature SHA256SUMS.sig SHA256SUMS
+      - uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: 'dist/cc-agent-*'
+      - name: Publication
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "$GITHUB_REF_NAME" dist/* --title "$GITHUB_REF_NAME" --generate-notes
