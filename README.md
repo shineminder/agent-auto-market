@@ -171,7 +171,7 @@ The agent does not update your operating system. The service shows the system ve
 | Recovery | An order whose outcome is unknown is **never** sent again automatically: no double buy. |
 | Release chain | Signed releases (ECDSA P-256), SHA-256 checksums, GitHub build provenance. |
 
-**Data sent to the service**: agent version, system description (e.g. `Microsoft Windows 10.0.22631 (X64)`), machine name at pairing, order results (quantity, price, fees). **Nothing else.**
+**Data sent to the service**: agent version, system description (e.g. `Microsoft Windows 10.0.22631 (X64)`), machine name at pairing, whether a Coinbase key is configured (yes/no, never the key itself), order results (quantity, price, fees). **Nothing else.**
 
 Found a vulnerability? See [SECURITY.md](SECURITY.md). **Do not open a public issue.**
 

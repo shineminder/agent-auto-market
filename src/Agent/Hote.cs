@@ -16,7 +16,7 @@ internal static class Hote
         builder.Services.AddSystemd();
         if (OperatingSystem.IsWindows())
         {
-            builder.Services.Configure<EventLogSettings>(r => r.SourceName = Produit.NomService);
+            builder.Services.Configure<EventLogSettings>(r => { if (OperatingSystem.IsWindows()) { r.SourceName = Produit.NomService; } });
         }
         builder.Services.AddHostedService<Boucle>();
 

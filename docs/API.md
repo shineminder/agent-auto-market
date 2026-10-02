@@ -2,7 +2,7 @@
 
 Base: `https://<your-site>/api/agent/v1`. HTTPS required. The site address is set at install time and can be changed with `cc-agent server --url`.
 Authentication: `Authorization: Bearer <token>` (except pairing).
-Headers sent on every call: `X-Agent-Version` (e.g. `1.2.3`), `X-Agent-Os` (system description, 120 characters max).
+Headers sent on every call: `X-Agent-Version` (e.g. `1.2.3`), `X-Agent-Os` (system description, 120 characters max), `X-Agent-Cle` (`1` or `0`: whether a Coinbase key is configured, never the key).
 Rate limits: 60 calls per minute; pairing: 10 calls per 10 minutes.
 
 | Method | Route | Body | Responses |

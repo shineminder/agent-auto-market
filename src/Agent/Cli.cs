@@ -248,7 +248,7 @@ internal static class Cli
         {
             Code = code,
             Nom = Environment.MachineName,
-            Systeme = Systeme.Description(),
+            Systeme = (OperatingSystem.IsWindows() ? "Windows " : "Linux ") + System.Runtime.InteropServices.RuntimeInformation.OSArchitecture.ToString().ToLowerInvariant(),
         }, CancellationToken.None).ConfigureAwait(false);
         if (r?.Jeton is not { Length: > 0 } jeton)
         {

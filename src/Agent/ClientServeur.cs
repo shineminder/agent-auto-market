@@ -10,7 +10,7 @@ internal sealed class ClientServeur : IDisposable
 {
     private readonly HttpClient _http;
 
-    public ClientServeur(ConfigAgent config, string? jeton)
+    public ClientServeur(ConfigAgent config, string? jeton, bool? cleCoinbase = null)
     {
         if (!Uri.TryCreate(config.Serveur.TrimEnd('/') + "/api/agent/v1/", UriKind.Absolute, out var adresse))
         {
@@ -25,6 +25,10 @@ internal sealed class ClientServeur : IDisposable
         _http.DefaultRequestHeaders.UserAgent.ParseAdd($"cryptocrypt-agent/{Produit.Version}");
         _http.DefaultRequestHeaders.TryAddWithoutValidation("X-Agent-Version", Produit.Version);
         _http.DefaultRequestHeaders.TryAddWithoutValidation("X-Agent-Os", Systeme.Description());
+        if (cleCoinbase is { } cle)
+        {
+            _http.DefaultRequestHeaders.TryAddWithoutValidation("X-Agent-Cle", cle ? "1" : "0");
+        }
         if (!string.IsNullOrEmpty(jeton))
         {
             _http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", jeton);

@@ -78,7 +78,7 @@ internal sealed class Boucle(ILogger<Boucle> journal, IHostApplicationLifetime v
             return false;
         }
 
-        using var serveur = new ClientServeur(config, secrets.Jeton);
+        using var serveur = new ClientServeur(config, secrets.Jeton, !string.IsNullOrEmpty(secrets.CoinbaseCle));
         var etat = await serveur.EtatAsync(ct).ConfigureAwait(false)
             ?? throw new AgentException("Etat du service illisible.", Raison.Temporaire);
 
