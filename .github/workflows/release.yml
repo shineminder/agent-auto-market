@@ -43,8 +43,35 @@ jobs:
           name: ${{ matrix.rid }}
           path: ${{ matrix.fichier }}
 
-  publier:
+  installateur:
     needs: build
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: win-x64
+          path: dist
+      - name: Inno Setup
+        shell: pwsh
+        run: |
+          if (-not (Test-Path "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe")) { choco install innosetup -y --no-progress }
+      - name: Installateur Windows
+        shell: pwsh
+        env:
+          AGENT_SITE_URL: ${{ vars.AGENT_SITE_URL }}
+        run: |
+          $version = $env:GITHUB_REF_NAME.TrimStart('v')
+          & "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" "/DAppVersion=$version" "/DSiteUrl=$env:AGENT_SITE_URL" "/DSourceExe=$PWD\dist\cc-agent-win-x64.exe" "/O$PWD\dist" install\windows\setup.iss
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+      # Signature Authenticode de l installateur : a ajouter ici avec le certificat de signature de code.
+      - uses: actions/upload-artifact@v4
+        with:
+          name: installateur-windows
+          path: dist/agent-setup-windows-x64.exe
+
+  publier:
+    needs: [build, installateur]
     runs-on: ubuntu-24.04
     permissions:
       contents: write
@@ -64,7 +91,7 @@ jobs:
         run: |
           test -n "$RELEASE_SIGNING_KEY" || { echo "Secret RELEASE_SIGNING_KEY absent"; exit 1; }
           cd dist
-          sha256sum cc-agent-* install.ps1 install.sh installer.bat installer.sh > SHA256SUMS
+          sha256sum cc-agent-* agent-setup-windows-x64.exe install.ps1 install.sh installer.bat installer.sh > SHA256SUMS
           umask 077
           printf '%s\n' "$RELEASE_SIGNING_KEY" > "$RUNNER_TEMP/cle.pem"
           openssl dgst -sha256 -sign "$RUNNER_TEMP/cle.pem" -out SHA256SUMS.sig SHA256SUMS
@@ -72,7 +99,9 @@ jobs:
           openssl dgst -sha256 -verify ../keys/release-public.pem -signature SHA256SUMS.sig SHA256SUMS
       - uses: actions/attest-build-provenance@v2
         with:
-          subject-path: 'dist/cc-agent-*'
+          subject-path: |
+            dist/cc-agent-*
+            dist/agent-setup-*
       - name: Publication
         env:
           GH_TOKEN: ${{ github.token }}
