@@ -158,16 +158,6 @@ Même un service compromis ne peut pas les dépasser.
 
 L'agent ne met pas à jour votre système d'exploitation. Le service affiche la version du système déclarée par chaque agent, pour repérer les machines à mettre à jour.
 
-## Changer l'adresse du site
-
-Si votre site GLB invest change d'adresse, lancez sur chaque machine :
-
-```text
-cc-agent server --url https://nouveau-site
-```
-
-L'agent vérifie d'abord que la nouvelle adresse accepte ses identifiants actuels, puis bascule. Aucun nouvel appairage n'est nécessaire.
-
 ## Sécurité
 
 | Sujet | Mesure |
@@ -223,6 +213,11 @@ Oui, pour que l'agent traite les ordres. Un ordre non traité à temps expire. P
 <details><summary><b>Que se passe-t-il si le service GLB invest est piraté ?</b></summary>
 
 Il ne peut ni obtenir votre clé, ni dépasser vos plafonds locaux, ni installer un agent non signé. Vous pouvez révoquer l'appareil et arrêter le service à tout moment.
+</details>
+
+<details><summary><b>Le site a changé d'adresse et mon agent ne se connecte plus.</b></summary>
+
+Normalement, rien à faire : l'agent suit la nouvelle adresse tout seul. Si votre machine est restée éteinte longtemps, lancez une fois : `cc-agent server --url https://nouvelle-adresse`
 </details>
 
 <details><summary><b>Mon antivirus bloque le programme.</b></summary>

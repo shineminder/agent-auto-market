@@ -13,6 +13,8 @@ internal sealed class Boucle(ILogger<Boucle> journal, IHostApplicationLifetime v
     private readonly HashSet<long> _ecartes = [];
     private string? _majEchouee;
     private DateTimeOffset _majProchainEssai;
+    private string? _adresseRefusee;
+    private DateTimeOffset _adresseProchainEssai;
 
     protected override async Task ExecuteAsync(CancellationToken ct)
     {
@@ -97,6 +99,8 @@ internal sealed class Boucle(ILogger<Boucle> journal, IHostApplicationLifetime v
             }
         }
 
+        await MigrerAdresseAsync(config, secrets.Jeton!, etat, ct).ConfigureAwait(false);
+
         if (await MettreAJourAsync(config, etat, ct).ConfigureAwait(false))
         {
             return true;
@@ -119,6 +123,50 @@ internal sealed class Boucle(ILogger<Boucle> journal, IHostApplicationLifetime v
 
         await RenouvelerJetonAsync(serveur, etat, ct).ConfigureAwait(false);
         return false;
+    }
+
+    /// <summary>
+    /// Suit l adresse officielle annoncee par le site, apres verification : HTTPS, jeton accepte
+    /// et meme agent a la nouvelle adresse. En cas d echec, l agent reste sur l ancienne adresse.
+    /// </summary>
+    private async Task MigrerAdresseAsync(ConfigAgent config, string jeton, ReponseEtat etat, CancellationToken ct)
+    {
+        var nouvelle = etat.Adresse?.Trim().TrimEnd('/');
+        if (string.IsNullOrEmpty(nouvelle) || string.Equals(nouvelle, config.Serveur.TrimEnd('/'), StringComparison.OrdinalIgnoreCase))
+        {
+            return;
+        }
+        if (nouvelle == _adresseRefusee && DateTimeOffset.UtcNow < _adresseProchainEssai)
+        {
+            return;
+        }
+        try
+        {
+            if (!Uri.TryCreate(nouvelle, UriKind.Absolute, out var uri) || (uri.Scheme != Uri.UriSchemeHttps && !config.AutoriserHttp))
+            {
+                throw new AgentException("adresse non HTTPS");
+            }
+            var essai = new ConfigAgent { Serveur = nouvelle, AutoriserHttp = config.AutoriserHttp };
+            using var client = new ClientServeur(essai, jeton);
+            var reponse = await client.EtatAsync(ct).ConfigureAwait(false)
+                ?? throw new AgentException("reponse illisible");
+            if (reponse.Agent?.Id is not { } id || id != etat.Agent?.Id)
+            {
+                throw new AgentException("un autre agent repond a cette adresse");
+            }
+        }
+        catch (Exception ex) when (!ct.IsCancellationRequested)
+        {
+            _adresseRefusee = nouvelle;
+            _adresseProchainEssai = DateTimeOffset.UtcNow.AddHours(1);
+            journal.LogWarning("Nouvelle adresse du site {Adresse} non retenue ({Motif}) : nouvel essai dans une heure.", nouvelle, ex.Message);
+            return;
+        }
+
+        var ancienne = config.Serveur;
+        config.Serveur = nouvelle;
+        Stockage.EcrireConfig(config);
+        journal.LogInformation("Adresse du site mise a jour : {Ancienne} vers {Nouvelle}.", ancienne, nouvelle);
     }
 
     private async Task<bool> MettreAJourAsync(ConfigAgent config, ReponseEtat etat, CancellationToken ct)

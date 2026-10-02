@@ -160,16 +160,6 @@ Even a compromised service cannot go past them.
 
 The agent does not update your operating system. The service shows the system version each agent reports, to spot machines that need updates.
 
-## Changing the site address
-
-If your GLB invest site moves to a new address, run on each machine:
-
-```text
-cc-agent server --url https://new-site
-```
-
-The agent first checks that the new address accepts its current credentials, then switches. No new pairing needed.
-
 ## Security
 
 | Topic | How |
@@ -225,6 +215,11 @@ Yes, for the agent to process orders. An order that is not processed in time exp
 <details><summary><b>What if the GLB invest service is hacked?</b></summary>
 
 It cannot get your key, cannot go past your local limits, and cannot install an unsigned agent. You can revoke the device and stop the service at any time.
+</details>
+
+<details><summary><b>The site changed address and my agent no longer connects.</b></summary>
+
+Normally there is nothing to do: the agent follows the new address on its own. If your machine stayed off for a long time, run once: `cc-agent server --url https://new-address`
 </details>
 
 <details><summary><b>My antivirus blocks the program.</b></summary>

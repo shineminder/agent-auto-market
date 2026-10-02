@@ -8,7 +8,7 @@ Rate limits: 60 calls per minute; pairing: 10 calls per 10 minutes.
 | Method | Route | Body | Responses |
 |---|---|---|---|
 | POST | `/appairer` | `code`, `nom`, `type`, `systeme` | 201 `jeton`, `appareil_id`, `agent_id`, `expire_le` / 422 invalid code |
-| GET | `/etat` | - | 200 `agent`, `simulation`, `actifs[]`, `jeton_expire_le`, `mise_a_jour.version` |
+| GET | `/etat` | - | 200 `agent`, `simulation`, `actifs[]`, `jeton_expire_le`, `mise_a_jour.version`, `adresse` |
 | GET | `/signaux` | - | 200 `signaux[]`: `id`, `action`, `symbol`, `plateforme`, `montant`, `devise`, `prix_limite`, `expire_le`, `correlation` |
 | POST | `/autoriser` | `action`, `symbol`, `plateforme`, `montant`, `devise`, `prix?`, `correlation` | 200 `autorise`, `confirmation`, `autorisation`, `expire_le`, `simulation`, `correlation` / refusal: `autorise=false`, `motif`, `message` |
 | GET | `/autorisation/{id}` | - | 200 `etat` (`a_confirmer`, `demande`, `annulee`, `expire`...), `utilisable`, `expire_le` |

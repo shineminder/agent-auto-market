@@ -97,6 +97,7 @@ internal sealed class ReponseEtat
     public List<ActifInfo> Actifs { get; set; } = [];
     public string? JetonExpireLe { get; set; }
     public MiseAJourInfo? MiseAJour { get; set; }
+    public string? Adresse { get; set; }
 }
 
 internal sealed class SignalApi
