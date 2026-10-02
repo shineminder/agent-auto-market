@@ -71,6 +71,7 @@ jobs:
           path: dist/agent-setup-windows-x64.exe
 
   publier:
+    environment: release
     needs: [build, installateur]
     runs-on: ubuntu-24.04
     permissions:
