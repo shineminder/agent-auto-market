@@ -38,7 +38,7 @@ jobs:
           dotnet publish src/Agent/Agent.csproj -c Release -r ${{ matrix.rid }} -p:Version=$VERSION -o out
           if [ "${{ runner.os }}" = "Windows" ]; then cp out/cc-agent.exe "${{ matrix.fichier }}"; else cp out/cc-agent "${{ matrix.fichier }}"; fi
       # Signature Authenticode : a ajouter ici des que le certificat de signature de code est disponible.
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: ${{ matrix.rid }}
           path: ${{ matrix.fichier }}
