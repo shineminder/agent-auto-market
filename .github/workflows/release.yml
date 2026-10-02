@@ -70,7 +70,7 @@ jobs:
           openssl dgst -sha256 -sign "$RUNNER_TEMP/cle.pem" -out SHA256SUMS.sig SHA256SUMS
           rm -f "$RUNNER_TEMP/cle.pem"
           openssl dgst -sha256 -verify ../keys/release-public.pem -signature SHA256SUMS.sig SHA256SUMS
-      - uses: actions/attest-build-provenance@v2
+      - uses: actions/attest-build-provenance@v4
         with:
           subject-path: 'dist/cc-agent-*'
       - name: Publication
