@@ -85,14 +85,14 @@ jobs:
           path: dist
           merge-multiple: true
       - name: Installateurs
-        run: cp install/install.ps1 install/install.sh install/installer.bat install/installer.sh dist/
+        run: cp install/install.ps1 install/install.sh install/installer.bat install/installer.sh install/uninstall.sh install/uninstall.ps1 dist/
       - name: Empreintes et signature
         env:
           RELEASE_SIGNING_KEY: ${{ secrets.RELEASE_SIGNING_KEY }}
         run: |
           test -n "$RELEASE_SIGNING_KEY" || { echo "Secret RELEASE_SIGNING_KEY absent"; exit 1; }
           cd dist
-          sha256sum cc-agent-* agent-setup-windows-x64.exe install.ps1 install.sh installer.bat installer.sh > SHA256SUMS
+          sha256sum cc-agent-* agent-setup-windows-x64.exe install.ps1 install.sh installer.bat installer.sh uninstall.sh uninstall.ps1 > SHA256SUMS
           umask 077
           printf '%s\n' "$RELEASE_SIGNING_KEY" > "$RUNNER_TEMP/cle.pem"
           openssl dgst -sha256 -sign "$RUNNER_TEMP/cle.pem" -out SHA256SUMS.sig SHA256SUMS
