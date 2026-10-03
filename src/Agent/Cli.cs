@@ -5,7 +5,7 @@ using System.Text.Json;
 namespace CryptoCrypt.Agent;
 
 /// <summary>Ligne de commande : configuration locale et diagnostic. La commande run lance le service.</summary>
-internal static class Cli
+internal static partial class Cli
 {
     private const string AccesRefuse =
         "Acces refuse. Windows : ouvrez PowerShell en administrateur. Linux : sudo -u ccagent cc-agent <commande>.";
@@ -73,7 +73,8 @@ internal static class Cli
         Console.WriteLine($"{Produit.Nom} {Produit.Version} - {Systeme.Description()}");
         Ligne("Serveur", c.Serveur is { Length: > 0 } ? c.Serveur : "aucun");
         Ligne("Appairage", string.IsNullOrEmpty(s.Jeton) ? "non (cc-agent pair --code XXXX-XXXX --server URL)" : "oui");
-        Ligne("Cle Coinbase", string.IsNullOrEmpty(s.CoinbaseCle) ? "absente (cc-agent key --file cdp_api_key.json)" : "presente");
+        Ligne("Cles de plateforme", s.AvecCle() is { Count: > 0 } cles ? string.Join(", ", cles) : "aucune (cc-agent key --file cdp_api_key.json)");
+        Ligne("Plateformes gerees", string.Join(", ", Plateformes.Prises));
         AfficherPlafonds(c, engage);
         Ligne("Ordres en cours", e.EnAttente.Count.ToString(CultureInfo.InvariantCulture));
         foreach (var x in e.EnAttente)
@@ -98,55 +99,6 @@ internal static class Cli
             }
         }
         return 0;
-    }
-
-    private static async Task<int> VerifyAsync(Options o)
-    {
-        o.Limiter();
-        var c = Stockage.LireConfig();
-        var s = CoffreSecrets.Lire();
-        var ok = true;
-        Console.WriteLine($"{Produit.Nom} {Produit.Version} - {Systeme.Description()}");
-
-        if (string.IsNullOrEmpty(c.Serveur) || string.IsNullOrEmpty(s.Jeton))
-        {
-            ok &= Resultat("Service", false, "machine non appairee : cc-agent pair --code XXXX-XXXX --server URL");
-        }
-        else
-        {
-            try
-            {
-                using var client = new ClientServeur(c, s.Jeton);
-                var e = await client.EtatAsync(CancellationToken.None).ConfigureAwait(false);
-                ok &= Resultat("Service", true, $"joint, agent {e?.Agent?.Nom} ({e?.Agent?.Etat}){(e?.Simulation == true ? ", mode simulation" : "")}");
-            }
-            catch (Exception ex) when (ex is AgentException or HttpRequestException or TaskCanceledException)
-            {
-                ok &= Resultat("Service", false, ex.Message);
-            }
-        }
-
-        if (string.IsNullOrEmpty(s.CoinbaseCle))
-        {
-            ok &= Resultat("Coinbase", false, "cle absente : cc-agent key --file cdp_api_key.json");
-        }
-        else
-        {
-            try
-            {
-                using var cb = new ClientCoinbase(s.CoinbaseNom, s.CoinbaseCle);
-                await cb.VerifierAsync(CancellationToken.None).ConfigureAwait(false);
-                ok &= Resultat("Coinbase", true, "cle acceptee");
-            }
-            catch (Exception ex) when (ex is AgentException or HttpRequestException or TaskCanceledException)
-            {
-                ok &= Resultat("Coinbase", false, ex.Message);
-            }
-        }
-
-        Resultat("Mises a jour signees", Produit.MisesAJourActivees,
-            Produit.MisesAJourActivees ? $"releases de {Produit.Depot}" : "cle de release absente de cette version");
-        return ok ? 0 : 1;
     }
 
     private static int Limits(Options o)
@@ -263,38 +215,6 @@ internal static class Cli
         return 0;
     }
 
-    private static async Task<int> KeyAsync(Options o)
-    {
-        o.Limiter("file");
-        ExigerCompteAgent();
-        string contenu;
-        if (o["file"] is { Length: > 0 } fichier)
-        {
-            if (!File.Exists(fichier)) throw new AgentException($"Fichier de cle introuvable : {fichier}");
-            contenu = await File.ReadAllTextAsync(fichier).ConfigureAwait(false);
-        }
-        else if (Console.IsInputRedirected)
-        {
-            contenu = await Console.In.ReadToEndAsync().ConfigureAwait(false);
-        }
-        else
-        {
-            throw new AgentException("Fichier attendu : cc-agent key --file cdp_api_key.json");
-        }
-
-        var (nom, pem) = LireFichierCle(contenu);
-        using (var cb = new ClientCoinbase(nom, pem))
-        {
-            await cb.VerifierAsync(CancellationToken.None).ConfigureAwait(false);
-        }
-        var s = SecretsOuVides();
-        s.CoinbaseNom = nom;
-        s.CoinbaseCle = pem;
-        CoffreSecrets.Ecrire(s);
-        Console.WriteLine("Cle Coinbase verifiee et enregistree. Supprimez le fichier telecharge.");
-        return 0;
-    }
-
     private static async Task<int> ServerAsync(Options o)
     {
         o.Limiter("url");
@@ -327,30 +247,6 @@ internal static class Cli
     }
 
     // ---------- Outils ----------
-
-    private static (string Nom, string Cle) LireFichierCle(string contenu)
-    {
-        try
-        {
-            using var doc = JsonDocument.Parse(contenu);
-            var racine = doc.RootElement;
-            string? Champ(string n) =>
-                racine.ValueKind == JsonValueKind.Object && racine.TryGetProperty(n, out var v) && v.ValueKind == JsonValueKind.String
-                    ? v.GetString()
-                    : null;
-            var nom = Champ("name") ?? Champ("id");
-            var cle = Champ("privateKey");
-            if (!string.IsNullOrWhiteSpace(nom) && cle is not null && cle.Contains("PRIVATE KEY", StringComparison.Ordinal))
-            {
-                return (nom.Trim(), cle);
-            }
-        }
-        catch (JsonException)
-        {
-            // traite ci-dessous
-        }
-        throw new AgentException("Fichier de cle non reconnu : le fichier cdp_api_key.json telecharge chez Coinbase est attendu (algorithme ECDSA).");
-    }
 
     private static Secrets SecretsOuVides()
     {
@@ -468,7 +364,7 @@ internal static class Cli
               update [--version X.Y.Z] [--allow-downgrade]
                                                    Installe la version demandee (si plus recente et signee)
               pair --code XXXX-XXXX [--server URL] Appaire cette machine
-              key --file cdp_api_key.json          Remplace la cle Coinbase (verifiee avant enregistrement)
+              key [--platform coinbase] --file F   Cle d une plateforme (verifiee avant enregistrement)
               server --url https://...             Change l adresse du site (sans nouvel appairage)
               run                                  Execute l agent (utilise par le service)
               version | help

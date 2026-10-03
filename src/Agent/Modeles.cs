@@ -15,7 +15,7 @@ internal sealed class ConfigAgent
     public bool MisesAJourAuto { get; set; } = true;
 }
 
-internal sealed class Secrets
+internal sealed partial class Secrets
 {
     public string? Jeton { get; set; }
     public string? CoinbaseNom { get; set; }
@@ -120,6 +120,7 @@ internal sealed class ReponseSignaux
 
 internal sealed class DemandeAutorisation
 {
+    public long? SignalId { get; set; }
     public string Action { get; set; } = "";
     public string Symbol { get; set; } = "";
     public string? Plateforme { get; set; }

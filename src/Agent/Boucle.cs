@@ -78,7 +78,7 @@ internal sealed class Boucle(ILogger<Boucle> journal, IHostApplicationLifetime v
             return false;
         }
 
-        using var serveur = new ClientServeur(config, secrets.Jeton, !string.IsNullOrEmpty(secrets.CoinbaseCle));
+        using var serveur = new ClientServeur(config, secrets.Jeton, secrets.AuMoinsUneCle());
         var etat = await serveur.EtatAsync(ct).ConfigureAwait(false)
             ?? throw new AgentException("Etat du service illisible.", Raison.Temporaire);
 
@@ -106,19 +106,17 @@ internal sealed class Boucle(ILogger<Boucle> journal, IHostApplicationLifetime v
             return true;
         }
 
-        ClientCoinbase coinbase;
+        var plateformes = Plateformes.Ouvrir(secrets, journal);
         try
         {
-            coinbase = new ClientCoinbase(secrets.CoinbaseNom, secrets.CoinbaseCle);
+            await new Executeur(config, etat, serveur, plateformes, journal, _ecartes).TraiterAsync(ct).ConfigureAwait(false);
         }
-        catch (AgentException ex)
+        finally
         {
-            journal.LogWarning("{Message}", ex.Message);
-            coinbase = new ClientCoinbase(null, null);
-        }
-        using (coinbase)
-        {
-            await new Executeur(config, etat, serveur, coinbase, journal, _ecartes).TraiterAsync(ct).ConfigureAwait(false);
+            foreach (var p in plateformes.Values)
+            {
+                p.Dispose();
+            }
         }
 
         await RenouvelerJetonAsync(serveur, etat, ct).ConfigureAwait(false);

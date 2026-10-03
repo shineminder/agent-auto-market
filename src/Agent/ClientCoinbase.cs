@@ -6,10 +6,10 @@ using System.Text.Json;
 namespace CryptoCrypt.Agent;
 
 /// <summary>
-/// Acces a Coinbase Advanced Trade avec la cle de l utilisateur, qui ne quitte jamais cet appareil.
+/// Coinbase Advanced Trade, premiere plateforme prise en charge. La cle de l utilisateur ne quitte jamais cet appareil.
 /// Chaque requete privee est signee par un jeton JWT ES256 valable deux minutes.
 /// </summary>
-internal sealed class ClientCoinbase : IDisposable
+internal sealed class ClientCoinbase : IPlateforme
 {
     private const string Hote = "api.coinbase.com";
     private readonly HttpClient _http = new() { BaseAddress = new Uri($"https://{Hote}/"), Timeout = TimeSpan.FromSeconds(30) };
@@ -43,7 +43,36 @@ internal sealed class ClientCoinbase : IDisposable
         _cle = cle;
     }
 
+    public string Nom => "coinbase";
+
     public bool CleDisponible => _cle is not null;
+
+    public string Paire(string symbole, string devise) => $"{symbole}-{devise}".ToUpperInvariant();
+
+    /// <summary>Lit le fichier cdp_api_key.json telecharge chez Coinbase.</summary>
+    public static CleApi LireCle(string contenu)
+    {
+        try
+        {
+            using var doc = JsonDocument.Parse(contenu);
+            var racine = doc.RootElement;
+            string? Champ(string n) =>
+                racine.ValueKind == JsonValueKind.Object && racine.TryGetProperty(n, out var v) && v.ValueKind == JsonValueKind.String
+                    ? v.GetString()
+                    : null;
+            var nom = Champ("name") ?? Champ("id");
+            var cle = Champ("privateKey");
+            if (!string.IsNullOrWhiteSpace(nom) && cle is not null && cle.Contains("PRIVATE KEY", StringComparison.Ordinal))
+            {
+                return new CleApi { Identifiant = nom.Trim(), Secret = cle };
+            }
+        }
+        catch (JsonException)
+        {
+            // traite ci-dessous
+        }
+        throw new AgentException("Fichier de cle non reconnu : le fichier cdp_api_key.json telecharge chez Coinbase est attendu (algorithme ECDSA).");
+    }
 
     /// <summary>Verifie que Coinbase accepte la cle (lecture d un compte).</summary>
     public async Task VerifierAsync(CancellationToken ct)
@@ -56,29 +85,34 @@ internal sealed class ClientCoinbase : IDisposable
     }
 
     /// <summary>Cours et pas de quantite d un produit (donnee publique).</summary>
-    public async Task<ProduitCoinbase> ProduitAsync(string produit, CancellationToken ct)
+    public async Task<CoursProduit> CoursAsync(string paire, CancellationToken ct)
     {
-        using var reponse = await _http.GetAsync("api/v3/brokerage/market/products/" + Uri.EscapeDataString(produit), ct).ConfigureAwait(false);
+        using var reponse = await _http.GetAsync("api/v3/brokerage/market/products/" + Uri.EscapeDataString(paire), ct).ConfigureAwait(false);
         if (!reponse.IsSuccessStatusCode)
         {
-            throw new AgentException($"Cours indisponible pour {produit} ({(int)reponse.StatusCode}).", Raison.Temporaire);
+            throw new AgentException($"Cours indisponible pour {paire} ({(int)reponse.StatusCode}).", Raison.Temporaire);
         }
         var texte = await reponse.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
-        return JsonSerializer.Deserialize(texte, JsonContexte.Default.ProduitCoinbase)
-            ?? throw new AgentException($"Cours illisible pour {produit}.", Raison.Temporaire);
+        var p = JsonSerializer.Deserialize(texte, JsonContexte.Default.ProduitCoinbase)
+            ?? throw new AgentException($"Cours illisible pour {paire}.", Raison.Temporaire);
+        return new CoursProduit(Decimales.Lire(p.Price), Decimales.Lire(p.BaseIncrement));
     }
 
     /// <summary>Ordre au marche, execute immediatement ou annule.</summary>
-    public async Task<string> PasserOrdreAsync(string clientOrderId, string produit, string cote, string? montantQuote, string? quantiteBase, CancellationToken ct)
+    public async Task<string> PasserOrdreAsync(OrdreMarche o, CancellationToken ct)
     {
         var ordre = new OrdreCoinbase
         {
-            ClientOrderId = clientOrderId,
-            ProductId = produit,
-            Side = cote,
+            ClientOrderId = o.ClientOrderId,
+            ProductId = o.Paire,
+            Side = o.Achat ? "BUY" : "SELL",
             OrderConfiguration = new ConfigurationOrdre
             {
-                MarketMarketIoc = new MarcheImmediat { QuoteSize = montantQuote, BaseSize = quantiteBase },
+                MarketMarketIoc = new MarcheImmediat
+                {
+                    QuoteSize = o.MontantQuote is { } q ? Decimales.Ecrire(q) : null,
+                    BaseSize = o.QuantiteBase is { } b ? Decimales.Ecrire(b) : null,
+                },
             },
         };
         var corps = JsonSerializer.Serialize(ordre, JsonContexte.Default.OrdreCoinbase);
@@ -101,15 +135,23 @@ internal sealed class ClientCoinbase : IDisposable
         return id;
     }
 
-    public async Task<OrdreDetail?> LireOrdreAsync(string orderId, CancellationToken ct)
+    public async Task<ResultatOrdre?> LireOrdreAsync(string id, CancellationToken ct)
     {
-        using var reponse = await EnvoyerSigneAsync(HttpMethod.Get, "/api/v3/brokerage/orders/historical/" + Uri.EscapeDataString(orderId), null, ct).ConfigureAwait(false);
+        using var reponse = await EnvoyerSigneAsync(HttpMethod.Get, "/api/v3/brokerage/orders/historical/" + Uri.EscapeDataString(id), null, ct).ConfigureAwait(false);
         if (!reponse.IsSuccessStatusCode)
         {
             return null;
         }
         var texte = await reponse.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
-        return JsonSerializer.Deserialize(texte, JsonContexte.Default.ReponseLectureOrdre)?.Order;
+        var d = JsonSerializer.Deserialize(texte, JsonContexte.Default.ReponseLectureOrdre)?.Order;
+        if (d is null)
+        {
+            return null;
+        }
+        var statut = (d.Status ?? "").ToUpperInvariant();
+        var termine = statut is "FILLED" or "CANCELLED" or "EXPIRED" or "FAILED";
+        return new ResultatOrdre(termine, Decimales.Lire(d.FilledSize), Decimales.Lire(d.FilledValue),
+            Decimales.Lire(d.AverageFilledPrice), Decimales.Lire(d.TotalFees), statut);
     }
 
     private async Task<HttpResponseMessage> EnvoyerSigneAsync(HttpMethod methode, string chemin, string? corps, CancellationToken ct)

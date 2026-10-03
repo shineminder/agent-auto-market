@@ -25,6 +25,7 @@ internal sealed class ClientServeur : IDisposable
         _http.DefaultRequestHeaders.UserAgent.ParseAdd($"cryptocrypt-agent/{Produit.Version}");
         _http.DefaultRequestHeaders.TryAddWithoutValidation("X-Agent-Version", Produit.Version);
         _http.DefaultRequestHeaders.TryAddWithoutValidation("X-Agent-Os", Systeme.Description());
+        _http.DefaultRequestHeaders.TryAddWithoutValidation("X-Agent-Plateformes", string.Join(",", Plateformes.Prises));
         if (cleCoinbase is { } cle)
         {
             _http.DefaultRequestHeaders.TryAddWithoutValidation("X-Agent-Cle", cle ? "1" : "0");
