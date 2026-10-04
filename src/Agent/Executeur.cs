@@ -185,6 +185,7 @@ internal sealed class Executeur(
             return true;
         }
         s.Autorisation = autorisation;
+        s.Simulation = r.Simulation;
 
         if (r.Confirmation)
         {
@@ -230,8 +231,10 @@ internal sealed class Executeur(
 
     private async Task<bool> ExecuterAsync(EtatLocal local, SignalLocal s, IPlateforme p, CancellationToken ct)
     {
+        // Le serveur decide du caractere simule de chaque autorisation : l agent suit cette decision.
+        var simulation = s.Simulation ?? etat.Simulation;
         // Les plafonds sont reverifies juste avant l execution (d autres ordres ont pu passer entre-temps).
-        if (PlafondsLocaux.Refus(config, local, s, etat.Simulation) is { } refus)
+        if (PlafondsLocaux.Refus(config, local, s, simulation) is { } refus)
         {
             Ecarter(s.Id, "plafonds locaux : " + refus);
             return true;
@@ -240,7 +243,7 @@ internal sealed class Executeur(
         var reference = s.ClientOrderId ??= Guid.NewGuid().ToString("D");
         var achat = s.Action == "acheter";
 
-        if (etat.Simulation)
+        if (simulation)
         {
             var cours = await CoursAsync(p, paire, ct).ConfigureAwait(false);
             journal.LogInformation("Simulation, ordre {Id} : {Action} {Montant} {Devise} de {Symbole} sur {Plateforme} au cours de {Cours} (aucun ordre passe).",
@@ -376,13 +379,22 @@ internal sealed class Executeur(
         return Plateformes.PriseEnCharge(nom) && plateformes.TryGetValue(nom, out var p) ? p : null;
     }
 
-    private string Paire(SignalLocal s, IPlateforme p) =>
-        etat.Actifs.FirstOrDefault(a =>
+    /// <summary>Le serveur decrit la paire en BASE/COTATION ; chaque plateforme la traduit dans son format.</summary>
+    private string Paire(SignalLocal s, IPlateforme p)
+    {
+        var brute = etat.Actifs.FirstOrDefault(a =>
                 string.Equals(a.Symbol, s.Symbol, StringComparison.OrdinalIgnoreCase)
                 && string.Equals(Plateformes.Normaliser(a.Plateforme), p.Nom, StringComparison.OrdinalIgnoreCase))
-            ?.Paire is { Length: > 0 } paire
-            ? paire.Trim().ToUpperInvariant()
-            : p.Paire(s.Symbol, s.Devise);
+            ?.Paire?.Trim().ToUpperInvariant();
+        if (string.IsNullOrEmpty(brute))
+        {
+            return p.Paire(s.Symbol, s.Devise);
+        }
+        var parties = brute.Split(new[] { '/', '-', '_' }, StringSplitOptions.RemoveEmptyEntries);
+        return parties.Length == 2 && Formats.Symbole(parties[0]) && Formats.Symbole(parties[1])
+            ? p.Paire(parties[0], parties[1])
+            : brute;
+    }
 
     private void Ecarter(long id, string motif)
     {

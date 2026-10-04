@@ -38,6 +38,7 @@ internal static class Etapes
 
 internal sealed class SignalLocal
 {
+    public bool? Simulation { get; set; }
     public long Id { get; set; }
     public string Action { get; set; } = "";
     public string Symbol { get; set; } = "";
@@ -132,6 +133,7 @@ internal sealed class DemandeAutorisation
 
 internal sealed class ReponseAutorisation
 {
+    public bool Simulation { get; set; }
     public bool Autorise { get; set; }
     public bool Confirmation { get; set; }
     public long? Autorisation { get; set; }
