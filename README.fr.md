@@ -169,7 +169,7 @@ L'agent ne met pas à jour votre système d'exploitation. Le service affiche la 
 | Reprise après incident | Un ordre dont l'issue est inconnue n'est **jamais** renvoyé automatiquement : pas de double achat. |
 | Chaîne de publication | Releases signées (ECDSA P-256), empreintes SHA-256, attestation de provenance GitHub. |
 
-**Données envoyées au service** : version de l'agent, description du système (ex. `Microsoft Windows 10.0.22631 (X64)`), nom de la machine à l'appairage, présence d'une clé Coinbase (oui ou non, jamais la clé elle-même), résultats des ordres (quantité, prix, frais). **Rien d'autre.**
+**Données envoyées au service** : version de l'agent, description du système (ex. `Microsoft Windows 10.0.22631 (X64)`), nom de la machine (à l'appairage et à chaque appel), présence d'une clé Coinbase (oui ou non, jamais la clé elle-même), résultats des ordres (quantité, prix, frais). **Rien d'autre.**
 
 Une faille ? Voir [SECURITY.md](SECURITY.md). **N'ouvrez pas de ticket public.**
 

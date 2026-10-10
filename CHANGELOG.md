@@ -2,6 +2,11 @@
 
 Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions: [SemVer](https://semver.org/).
 
+## [0.2.2] - 2026-10-10
+
+### Added
+- `X-Agent-Machine` header: the machine name is sent on every call, so the service can show a renamed or different machine.
+
 ## [0.1.0] - 2026-10-02
 
 ### Added
